@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (!(await checkAuth())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const subPath = searchParams.get('path') || 'perangkat';
+  const subPath = searchParams.get('path') || 'guru-agama';
 
   try {
     const auth = btoa(`${API_KEY}:${API_SECRET}`);
@@ -35,8 +35,6 @@ export async function GET(request: Request) {
 
     const data = await response.json();
     
-    // Cloudinary search doesn't explicitly return empty folders easy, 
-    // but we can map the resources.
     const items = (data.resources || []).map((res: any) => ({
       name: res.public_id.split('/').pop(),
       isDir: false,
@@ -63,16 +61,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File or path missing' }, { status: 400 });
     }
 
-    // For Edge runtime, we'll use an unsigned upload preset for simplicity 
-    // OR we can implement signing. 
-    // Let's try unsigned first, but it requires the user to create a preset.
-    // Better: use signed upload if we have the secret.
-    
     const timestamp = Math.round(new Date().getTime() / 1000);
     const folder = destPath;
     
-    // Create signature (This is the hard part in Edge without a lib)
-    // We'll use a helper to sign using SubtleCrypto
     const signature = await generateSignature(`folder=${folder}&timestamp=${timestamp}${API_SECRET}`);
 
     const uploadFormData = new FormData();
@@ -109,7 +100,7 @@ export async function DELETE(request: Request) {
   if (!(await checkAuth())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const publicId = searchParams.get('path'); // We use publicId for deletion
+  const publicId = searchParams.get('path');
 
   if (!publicId) return NextResponse.json({ error: 'Public ID missing' }, { status: 400 });
 
@@ -123,7 +114,6 @@ export async function DELETE(request: Request) {
     formData.append('api_key', API_KEY!);
     formData.append('signature', signature);
 
-    // For file/raw deletion, we need to specify resource_type=raw
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/destroy`, {
       method: 'POST',
       body: formData,

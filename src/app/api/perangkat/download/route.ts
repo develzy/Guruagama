@@ -14,7 +14,6 @@ export async function GET(request: Request) {
   const isGlobal = searchParams.get('isGlobal') === 'true';
   const directPath = searchParams.get('directPath');
 
-  // If we already have a direct URL from the search, we can just redirect or proxy it.
   if (directPath) {
     return NextResponse.redirect(directPath);
   }
@@ -25,14 +24,9 @@ export async function GET(request: Request) {
 
   try {
     const publicId = isGlobal 
-      ? `perangkat/${catFolder}/${fileName?.split('.')[0]}` 
-      : `perangkat/${gradePath}/${gradePath}/${catFolder}/${fileName?.split('.')[0]}`;
+      ? `guru-agama/${catFolder}/${fileName?.split('.')[0]}` 
+      : `guru-agama/${gradePath}/${gradePath}/${catFolder}/${fileName?.split('.')[0]}`;
 
-    // Get resource details to find the exact secure URL if needed, 
-    // or just construct it if we know the format.
-    // Cloudinary URLs usually follow: https://res.cloudinary.com/cloud_name/raw/upload/v1/public_id
-    
-    // For simplicity, we can search for the specific file
     const auth = btoa(`${API_KEY}:${API_SECRET}`);
     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/search`, {
       method: 'POST',

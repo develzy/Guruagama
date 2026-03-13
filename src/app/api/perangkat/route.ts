@@ -36,11 +36,11 @@ export async function GET(request: Request) {
   try {
     let expression = "";
     if (globalSearch) {
-      expression = `folder:perangkat/* AND ${globalSearch}`;
+      expression = `folder:guru-agama/* AND ${globalSearch}`;
     } else if (catFolder) {
       const folderPrefix = isGlobal 
-        ? `perangkat/${catFolder}` 
-        : `perangkat/${gradePath}/${gradePath}/${catFolder}`;
+        ? `guru-agama/${catFolder}` 
+        : `guru-agama/${gradePath}/${gradePath}/${catFolder}`;
       expression = `folder:"${folderPrefix}/*"`;
     } else {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
       name: res.public_id.split('/').pop(),
       size: res.bytes,
       ext: `.${res.format}`,
-      directPath: res.secure_url, // For direct access
+      directPath: res.secure_url,
     }));
 
     return NextResponse.json({ files, path: expression });
