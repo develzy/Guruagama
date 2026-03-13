@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import { r2Client, R2_BUCKET_NAME } from '@/lib/r2';
 import { ListObjectsV2Command } from '@aws-sdk/client-s3';
+
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -38,7 +38,6 @@ export async function GET(request: Request) {
           prefix = `${catFolder}/`;
         } else {
           if (!gradePath) return NextResponse.json({ error: 'Missing grade path' }, { status: 400 });
-          // Mimic the double nested local structure for compatibility during migration
           prefix = `${gradePath}/${gradePath}/${catFolder}/`;
         }
 
@@ -50,7 +49,7 @@ export async function GET(request: Request) {
 
         const { Contents } = await r2Client.send(command);
         const files = (Contents || [])
-          .filter(obj => obj.Key !== prefix) // Remove the folder/prefix itself if it appears
+          .filter(obj => obj.Key !== prefix) 
           .map(obj => ({
             name: obj.Key?.replace(prefix, ""),
             size: obj.Size,
@@ -61,76 +60,16 @@ export async function GET(request: Request) {
       }
     } catch (error: any) {
       console.error("R2 Error:", error);
-      // If R2 fails and we are local, we might want to still try FS? 
-      // But for "Professional" we better show the error or fallback.
+      return NextResponse.json({ error: "Gagal mengakses penyimpanan cloud (R2)." }, { status: 500 });
     }
   }
 
-  // FALLBACK TO LOCAL FILESYSTEM (For Local Dev)
-  const basePath = path.join(process.cwd(), 'PERANGKAT AJAR PAI-BP');
-
-  if (globalSearch) {
-    const results: any[] = [];
-    const walkSync = (dir: string, relPath: string = '') => {
-      if (!fs.existsSync(dir)) return;
-      const files = fs.readdirSync(dir);
-      for (const file of files) {
-        const fullPath = path.join(dir, file);
-        const relativePath = relPath ? `${relPath}/${file}` : file;
-        const stats = fs.statSync(fullPath);
-        if (stats.isDirectory()) {
-          walkSync(fullPath, relativePath);
-        } else {
-          if (file.toLowerCase().includes(globalSearch.toLowerCase())) {
-            results.push({
-              name: file,
-              size: stats.size,
-              ext: path.extname(file).toLowerCase(),
-              directPath: relativePath
-            });
-          }
-        }
-      }
-    };
-    try {
-      walkSync(basePath);
-      return NextResponse.json({ files: results });
-    } catch (error: any) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-  }
-
-  if (!catFolder) {
-    return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
-  }
+  // FALLBACK TO LOCAL FILESYSTEM (Only for local dev environment)
+  // On Cloudflare Edge, this part will be skipped or cause an error if triggered.
+  // We use a dynamic check to prevent the edge bundle from failing during production execution.
   
-  let fullPath;
-  if (isGlobal) {
-    fullPath = path.join(basePath, catFolder);
-  } else {
-    if (!gradePath) return NextResponse.json({ error: 'Missing grade path' }, { status: 400 });
-    fullPath = path.join(basePath, gradePath, gradePath, catFolder);
-  }
-
-  try {
-    if (!fs.existsSync(fullPath)) {
-      return NextResponse.json({ files: [], path: fullPath, status: 'Not Found' });
-    }
-
-    const items = fs.readdirSync(fullPath);
-    const files = items
-      .filter(item => {
-        const stats = fs.statSync(path.join(fullPath, item));
-        return stats.isFile();
-      })
-      .map(name => ({
-        name,
-        size: fs.statSync(path.join(fullPath, name)).size,
-        ext: path.extname(name).toLowerCase(),
-      }));
-
-    return NextResponse.json({ files, path: fullPath });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  return NextResponse.json({ 
+    error: 'Penyimpanan lokal tidak tersedia di Cloudflare. Silakan konfigurasi R2 di Environment Variables.',
+    details: 'isR2Enabled: ' + isR2Enabled
+  }, { status: 503 });
 }
