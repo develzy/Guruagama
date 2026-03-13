@@ -36,12 +36,15 @@ export async function GET(request: Request) {
   try {
     let expression = "";
     if (globalSearch) {
-      expression = `folder:guru-agama/* AND ${globalSearch}`;
+      // Search anywhere inside the guru-agama folder
+      expression = `folder:"guru-agama/*" AND ${globalSearch}`;
     } else if (catFolder) {
+      // Build the nested path based on the screenshot: guru-agama/PAI KELAS X/PAI KELAS X/FOLDER
       const folderPrefix = isGlobal 
         ? `guru-agama/${catFolder}` 
         : `guru-agama/${gradePath}/${gradePath}/${catFolder}`;
-      expression = `folder:"${folderPrefix}/*"`;
+      
+      expression = `folder:"${folderPrefix}"`;
     } else {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
@@ -49,15 +52,22 @@ export async function GET(request: Request) {
     const data = await fetchCloudinary(expression);
     
     if (data.error) {
-      throw new Error(data.error.message);
+      console.error("Cloudinary Search Error:", data.error);
+      // Fallback for global search if something fails
+      return NextResponse.json({ files: [], path: expression, debug: data.error });
     }
 
-    const files = (data.resources || []).map((res: any) => ({
-      name: res.public_id.split('/').pop(),
-      size: res.bytes,
-      ext: `.${res.format}`,
-      directPath: res.secure_url,
-    }));
+    const files = (data.resources || []).map((res: any) => {
+      const fullPublicId = res.public_id;
+      const fileNameWithExt = fullPublicId.split('/').pop();
+      
+      return {
+        name: fileNameWithExt,
+        size: res.bytes,
+        ext: `.${res.format || fileNameWithExt.split('.').pop()}`,
+        directPath: res.secure_url,
+      };
+    });
 
     return NextResponse.json({ files, path: expression });
   } catch (error: any) {
