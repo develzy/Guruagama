@@ -36,14 +36,14 @@ export async function GET(request: Request) {
   try {
     let expression = "";
     if (globalSearch) {
-      expression = `folder:"guru-agama/*" AND (resource_type:image OR resource_type:raw) AND ${globalSearch}`;
+      expression = `folder:"guru-agama/*" AND ${globalSearch}`;
     } else if (catFolder) {
       const folderPrefix = isGlobal 
         ? `guru-agama/${catFolder}` 
         : `guru-agama/${gradePath}/${gradePath}/${catFolder}`;
       
-      // We search for both images (PDFs often categorized here) and raw files (DOCX)
-      expression = `folder:"${folderPrefix}" AND (resource_type:image OR resource_type:raw)`;
+      // We search for both exact folder and its subfolders
+      expression = `folder:"${folderPrefix}" OR folder:"${folderPrefix}/*"`;
     } else {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
