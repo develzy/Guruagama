@@ -96,7 +96,7 @@ export default function ChatAIPage() {
                     </>
                   ) : (
                     <>
-                      <div className={`${styles.messageAvatar} ${styles.messageAvatarUser}`}>You</div>
+                      <div className={`${styles.messageAvatar} ${styles.messageAvatarUser}`}>U</div>
                       Anda
                     </>
                   )}
