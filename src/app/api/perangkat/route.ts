@@ -36,40 +36,38 @@ export async function GET(request: Request) {
   try {
     let expression = "";
     if (globalSearch) {
-      // Search anywhere inside the guru-agama folder
-      expression = `folder:"guru-agama/*" AND ${globalSearch}`;
+      expression = `folder:"guru-agama/*" AND (resource_type:image OR resource_type:raw) AND ${globalSearch}`;
     } else if (catFolder) {
-      // Build the nested path based on the screenshot: guru-agama/PAI KELAS X/PAI KELAS X/FOLDER
       const folderPrefix = isGlobal 
         ? `guru-agama/${catFolder}` 
         : `guru-agama/${gradePath}/${gradePath}/${catFolder}`;
       
-      expression = `folder:"${folderPrefix}"`;
+      // We search for both images (PDFs often categorized here) and raw files (DOCX)
+      expression = `folder:"${folderPrefix}" AND (resource_type:image OR resource_type:raw)`;
     } else {
       return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
     }
 
     const data = await fetchCloudinary(expression);
     
-    if (data.error) {
-      console.error("Cloudinary Search Error:", data.error);
-      // Fallback for global search if something fails
-      return NextResponse.json({ files: [], path: expression, debug: data.error });
-    }
+    // Debug log to see what's happening (check Cloudflare Logs)
+    console.log("Cloudinary Search Expression:", expression);
+    console.log("Cloudinary Result Count:", data.total_count || 0);
 
     const files = (data.resources || []).map((res: any) => {
       const fullPublicId = res.public_id;
       const fileNameWithExt = fullPublicId.split('/').pop();
+      const format = res.format || (fileNameWithExt.includes('.') ? fileNameWithExt.split('.').pop() : 'raw');
       
       return {
-        name: fileNameWithExt,
+        name: fileNameWithExt + (fileNameWithExt.includes('.') ? '' : `.${format}`),
         size: res.bytes,
-        ext: `.${res.format || fileNameWithExt.split('.').pop()}`,
+        ext: `.${format}`,
         directPath: res.secure_url,
       };
     });
 
-    return NextResponse.json({ files, path: expression });
+    return NextResponse.json({ files, path: expression, total: data.total_count });
   } catch (error: any) {
     console.error("Cloudinary Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
