@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import { cookies } from 'next/headers';
+import { r2Client, R2_BUCKET_NAME } from '@/lib/r2';
+import { ListObjectsV2Command, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+export const runtime = 'edge';
 
 // Helper to check auth
 async function checkAuth() {
@@ -17,27 +19,41 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const subPath = searchParams.get('path') || '';
-
-  const basePath = path.join(process.cwd(), 'PERANGKAT AJAR PAI-BP');
-  const targetPath = path.join(basePath, subPath);
+  const prefix = subPath ? (subPath.endsWith('/') ? subPath : `${subPath}/`) : '';
 
   try {
-    if (!fs.existsSync(targetPath)) {
-      return NextResponse.json({ error: 'Path not found' }, { status: 404 });
+    const isR2Enabled = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY;
+    if (!isR2Enabled) {
+      return NextResponse.json({ error: 'R2 not configured' }, { status: 500 });
     }
 
-    const items = fs.readdirSync(targetPath);
-    const result = items.map(name => {
-      const stats = fs.statSync(path.join(targetPath, name));
-      return {
-        name,
-        isDir: stats.isDirectory(),
-        size: stats.size,
-        ext: path.extname(name).toLowerCase(),
-      };
+    const command = new ListObjectsV2Command({
+      Bucket: R2_BUCKET_NAME,
+      Prefix: prefix,
+      Delimiter: '/',
     });
 
-    return NextResponse.json({ items: result, currentPath: subPath });
+    const { Contents, CommonPrefixes } = await r2Client.send(command);
+
+    // Folders
+    const folders = (CommonPrefixes || []).map(cp => ({
+      name: cp.Prefix?.replace(prefix, "").replace("/", ""),
+      isDir: true,
+      size: 0,
+      ext: '',
+    }));
+
+    // Files
+    const files = (Contents || [])
+      .filter(obj => obj.Key !== prefix)
+      .map(obj => ({
+        name: obj.Key?.replace(prefix, ""),
+        isDir: false,
+        size: obj.Size,
+        ext: '.' + obj.Key?.split('.').pop()?.toLowerCase(),
+      }));
+
+    return NextResponse.json({ items: [...folders, ...files], currentPath: subPath });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
@@ -58,12 +74,17 @@ export async function POST(request: Request) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const prefix = destPath ? (destPath.endsWith('/') ? destPath : `${destPath}/`) : '';
+    const key = `${prefix}${file.name}`;
 
-    const basePath = path.join(process.cwd(), 'PERANGKAT AJAR PAI-BP');
-    const fullPath = path.join(basePath, destPath, file.name);
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: new Uint8Array(bytes),
+      ContentType: file.type,
+    });
 
-    fs.writeFileSync(fullPath, buffer);
+    await r2Client.send(command);
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -83,21 +104,14 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Path missing' }, { status: 400 });
   }
 
-  const basePath = path.join(process.cwd(), 'PERANGKAT AJAR PAI-BP');
-  const fullPath = path.join(basePath, filePath);
-
   try {
-    if (fs.existsSync(fullPath)) {
-      const stats = fs.statSync(fullPath);
-      if (stats.isFile()) {
-        fs.unlinkSync(fullPath);
-      } else {
-        // Recursive delete for directories is risky, but we can support empty folders
-        fs.rmdirSync(fullPath);
-      }
-      return NextResponse.json({ success: true });
-    }
-    return NextResponse.json({ error: 'File not found' }, { status: 404 });
+    const command = new DeleteObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: filePath,
+    });
+
+    await r2Client.send(command);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
