@@ -21,11 +21,14 @@ interface R2Objects {
 
 declare namespace NodeJS {
   interface ProcessEnv {
-    R2_BUCKET: R2Bucket & string; // Intersection to satisfy both string (local dev) and object (production)
+    R2_BUCKET: R2Bucket & string;
     GEMINI_API_KEY: string;
     R2_ACCOUNT_ID: string;
     R2_ACCESS_KEY_ID: string;
     R2_SECRET_ACCESS_KEY: string;
     R2_BUCKET_NAME: string;
+    CLOUDINARY_CLOUD_NAME: string;
+    CLOUDINARY_API_KEY: string;
+    CLOUDINARY_API_SECRET: string;
   }
 }

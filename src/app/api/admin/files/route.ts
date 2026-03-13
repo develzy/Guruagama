@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { r2Client, R2_BUCKET_NAME } from '@/lib/r2';
-import { ListObjectsV2Command, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 export const runtime = 'edge';
 
-// Helper to check auth
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+const API_KEY = process.env.CLOUDINARY_API_KEY;
+const API_SECRET = process.env.CLOUDINARY_API_SECRET;
+
 async function checkAuth() {
   const cookieStore = await cookies();
   const session = cookieStore.get('admin_session');
@@ -16,78 +17,121 @@ export async function GET(request: Request) {
   if (!(await checkAuth())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const subPath = searchParams.get('path') || '';
-  const prefix = subPath ? (subPath.endsWith('/') ? subPath : `${subPath}/`) : '';
+  const subPath = searchParams.get('path') || 'perangkat';
 
-  // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET as any;
+  try {
+    const auth = btoa(`${API_KEY}:${API_SECRET}`);
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/search`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        expression: `folder:"${subPath}/*"`,
+        max_results: 100,
+      }),
+    });
 
-  if (R2_BINDING && typeof R2_BINDING !== 'string') {
-    const list = await R2_BINDING.list({ prefix, delimiter: '/' });
-    const folders = (list.delimitedPrefixes || []).map((p: string) => ({
-      name: p.replace(prefix, "").replace("/", ""),
-      isDir: true, size: 0, ext: ''
+    const data = await response.json();
+    
+    // Cloudinary search doesn't explicitly return empty folders easy, 
+    // but we can map the resources.
+    const items = (data.resources || []).map((res: any) => ({
+      name: res.public_id.split('/').pop(),
+      isDir: false,
+      size: res.bytes,
+      ext: `.${res.format}`,
+      public_id: res.public_id
     }));
-    const files = (list.objects || [])
-      .filter((obj: any) => obj.key !== prefix)
-      .map((obj: any) => ({
-        name: obj.key.replace(prefix, ""),
-        isDir: false, size: obj.size, ext: '.' + obj.key.split('.').pop()
-      }));
-    return NextResponse.json({ items: [...folders, ...files], currentPath: subPath });
-  }
 
-  // S3 Fallback
-  const command = new ListObjectsV2Command({ Bucket: R2_BUCKET_NAME, Prefix: prefix, Delimiter: '/' });
-  const { Contents, CommonPrefixes } = await r2Client.send(command);
-  const folders = (CommonPrefixes || []).map(cp => ({
-    name: cp.Prefix?.replace(prefix, "").replace("/", ""),
-    isDir: true, size: 0, ext: ''
-  }));
-  const files = (Contents || []).filter(obj => obj.Key !== prefix).map(obj => ({
-    name: obj.Key?.replace(prefix, ""),
-    isDir: false, size: obj.Size, ext: '.' + obj.Key?.split('.').pop()
-  }));
-  return NextResponse.json({ items: [...folders, ...files], currentPath: subPath });
+    return NextResponse.json({ items, currentPath: subPath });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
   if (!(await checkAuth())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const formData = await request.formData();
-  const file = formData.get('file') as File;
-  const destPath = formData.get('path') as string;
-  const prefix = destPath ? (destPath.endsWith('/') ? destPath : `${destPath}/`) : '';
-  const key = `${prefix}${file.name}`;
-  const bytes = await file.arrayBuffer();
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const destPath = formData.get('path') as string;
 
-  // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET as any;
-  if (R2_BINDING && typeof R2_BINDING !== 'string') {
-    await R2_BINDING.put(key, bytes, { httpMetadata: { contentType: file.type } });
-    return NextResponse.json({ success: true });
+    if (!file || !destPath) {
+      return NextResponse.json({ error: 'File or path missing' }, { status: 400 });
+    }
+
+    // For Edge runtime, we'll use an unsigned upload preset for simplicity 
+    // OR we can implement signing. 
+    // Let's try unsigned first, but it requires the user to create a preset.
+    // Better: use signed upload if we have the secret.
+    
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const folder = destPath;
+    
+    // Create signature (This is the hard part in Edge without a lib)
+    // We'll use a helper to sign using SubtleCrypto
+    const signature = await generateSignature(`folder=${folder}&timestamp=${timestamp}${API_SECRET}`);
+
+    const uploadFormData = new FormData();
+    uploadFormData.append('file', file);
+    uploadFormData.append('folder', folder);
+    uploadFormData.append('timestamp', timestamp.toString());
+    uploadFormData.append('api_key', API_KEY!);
+    uploadFormData.append('signature', signature);
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`, {
+      method: 'POST',
+      body: uploadFormData,
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    return NextResponse.json({ success: true, data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
 
-  const command = new PutObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key, Body: new Uint8Array(bytes), ContentType: file.type });
-  await r2Client.send(command);
-  return NextResponse.json({ success: true });
+async function generateSignature(str: string) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
 }
 
 export async function DELETE(request: Request) {
   if (!(await checkAuth())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const filePath = searchParams.get('path');
-  if (!filePath) return NextResponse.json({ error: 'Path missing' }, { status: 400 });
+  const publicId = searchParams.get('path'); // We use publicId for deletion
 
-  // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET as any;
-  if (R2_BINDING && typeof R2_BINDING !== 'string') {
-    await R2_BINDING.delete(filePath);
-    return NextResponse.json({ success: true });
+  if (!publicId) return NextResponse.json({ error: 'Public ID missing' }, { status: 400 });
+
+  try {
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const signature = await generateSignature(`public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`);
+
+    const formData = new FormData();
+    formData.append('public_id', publicId);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('api_key', API_KEY!);
+    formData.append('signature', signature);
+
+    // For file/raw deletion, we need to specify resource_type=raw
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/destroy`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await res.json();
+    return NextResponse.json({ success: true, data });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  const command = new DeleteObjectCommand({ Bucket: R2_BUCKET_NAME, Key: filePath });
-  await r2Client.send(command);
-  return NextResponse.json({ success: true });
 }

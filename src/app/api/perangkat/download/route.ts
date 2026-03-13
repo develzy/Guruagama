@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { r2Client, R2_BUCKET_NAME } from '@/lib/r2';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 export const runtime = 'edge';
+
+const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+const API_KEY = process.env.CLOUDINARY_API_KEY;
+const API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,50 +14,47 @@ export async function GET(request: Request) {
   const isGlobal = searchParams.get('isGlobal') === 'true';
   const directPath = searchParams.get('directPath');
 
-  // @ts-ignore - Cloudflare R2 Binding
-  const R2_BINDING = process.env.R2_BUCKET as any;
-
-  let key = directPath || (isGlobal ? `${catFolder}/${fileName}` : `${gradePath}/${gradePath}/${catFolder}/${fileName}`);
-  const safeFileName = fileName || key.split('/').pop() || 'document';
-  const contentType = safeFileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-  // 1. TRY USING CLOUDFLARE NATIVE BINDING (PRO)
-  if (R2_BINDING && typeof R2_BINDING !== 'string') {
-    try {
-      const obj = await R2_BINDING.get(key);
-      if (obj) {
-        const data = await obj.arrayBuffer();
-        return new NextResponse(data, {
-          headers: {
-            'Content-Disposition': `attachment; filename="${safeFileName}"`,
-            'Content-Type': contentType,
-          },
-        });
-      }
-    } catch (error: any) {
-      console.error("Native R2 Download Error:", error);
-    }
+  // If we already have a direct URL from the search, we can just redirect or proxy it.
+  if (directPath) {
+    return NextResponse.redirect(directPath);
   }
 
-  // 2. FALLBACK TO S3 API
-  const isR2Enabled = process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY;
-  if (isR2Enabled) {
-    try {
-      const command = new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key });
-      const response = await r2Client.send(command);
-      const data = await response.Body?.transformToByteArray();
-      if (data) {
-        return new NextResponse(data as any, {
-          headers: {
-            'Content-Disposition': `attachment; filename="${safeFileName}"`,
-            'Content-Type': contentType,
-          },
-        });
-      }
-    } catch (error: any) {
-      console.error("S3 R2 Download Error:", error);
-    }
+  if (!CLOUD_NAME || !API_KEY || !API_SECRET) {
+    return NextResponse.json({ error: 'Cloudinary not configured' }, { status: 500 });
   }
 
-  return NextResponse.json({ error: 'File tidak tersedia.' }, { status: 404 });
+  try {
+    const publicId = isGlobal 
+      ? `perangkat/${catFolder}/${fileName?.split('.')[0]}` 
+      : `perangkat/${gradePath}/${gradePath}/${catFolder}/${fileName?.split('.')[0]}`;
+
+    // Get resource details to find the exact secure URL if needed, 
+    // or just construct it if we know the format.
+    // Cloudinary URLs usually follow: https://res.cloudinary.com/cloud_name/raw/upload/v1/public_id
+    
+    // For simplicity, we can search for the specific file
+    const auth = btoa(`${API_KEY}:${API_SECRET}`);
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/search`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        expression: `public_id:"${publicId}"`,
+        max_results: 1,
+      }),
+    });
+
+    const data = await res.json();
+    const fileData = data.resources?.[0];
+
+    if (!fileData) {
+      return NextResponse.json({ error: 'File tidak ditemukan di Cloudinary.' }, { status: 404 });
+    }
+
+    return NextResponse.redirect(fileData.secure_url);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
