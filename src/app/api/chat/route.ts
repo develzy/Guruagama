@@ -7,11 +7,14 @@ export async function POST(request: Request) {
     const { messages } = await request.json();
     const apiKey = process.env.GEMINI_API_KEY;
 
+    // ERROR 1: Kunci tidak terbaca sama sekali
     if (!apiKey) {
-      return NextResponse.json({ error: 'Gemini API Key belum dipasang di server.' }, { status: 500 });
+      console.error("DEBUG: GEMINI_API_KEY is missing in environment");
+      return NextResponse.json({ 
+        error: 'API Key (GEMINI_API_KEY) tidak ditemukan di konfigurasi server Cloudflare Bapak. Mohon pasang di Environment Variables.' 
+      }, { status: 500 });
     }
 
-    // Google Gemini API expects a different format
     const geminiMessages = messages.map((m: any) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
@@ -19,43 +22,34 @@ export async function POST(request: Request) {
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: geminiMessages,
         systemInstruction: {
-          parts: [{ text: `Anda adalah "AI By Khulal", seorang pakar Pendidikan Agama Islam yang sangat terpelajar, bijaksana, dan memiliki gaya bahasa yang elegan serta intelektual. 
-          Aturan penting:
-          1. JANGAN mengucapkan salam (Assalamu'alaikum) di setiap jawaban jika percakapan berjalan berkelanjutan. Cukup langsung ke inti jawaban agar lebih efisien dan elegan.
-          2. Fokus pada materi PAI (Akidah, Akhlak, Fikih, SKI, Al-Qur'an Hadits).
-          3. WAJIB menyertakan dalil dari Al-Qur'an (nama surat dan ayat) atau Hadits (perawi) dalam format Markdown yang indah.
-          4. Sangat diutamakan merujuk pada pendapat Ulama Syafi'iyah (seperti Imam Nawawi, Imam Al-Ghazali) dan sebutkan juga pandangan ringkas 4 Mazhab Utama jika relevan.
-          5. Gunakan format Markdown yang sangat rapi.` }]
+          parts: [{ text: `Anda adalah "AI By Khulal", asisten PAI profesional. Jawablah dengan bijaksana, sertakan dalil Al-Qur'an/Hadits dan rujukan Madzhab Syafi'i jika relevan.` }]
         },
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 3000,
-        }
+        generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
       }),
     });
 
     const data = await response.json();
 
-    if (!response.ok || data.error) {
-      const errorMsg = data.error?.message || "Gagal mendapatkan respon dari server AI.";
-      if (errorMsg.includes("high demand") || errorMsg.includes("503")) {
-        return NextResponse.json({ error: "Server AI sedang sangat sibuk. Mohon coba lagi ya, Pak." }, { status: 503 });
-      }
-      return NextResponse.json({ error: errorMsg }, { status: 500 });
+    // ERROR 2: Respon dari Google tidak OK
+    if (!response.ok) {
+      const errorMsg = data.error?.message || response.statusText;
+      console.error("DEBUG: Google API Error:", errorMsg);
+      return NextResponse.json({ 
+        error: `Google API Error (${response.status}): ${errorMsg}` 
+      }, { status: response.status });
     }
 
     if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return NextResponse.json({ error: "Format respon AI tidak sesuai." }, { status: 500 });
+      return NextResponse.json({ error: "Reson AI kosong. Coba tanya lagi." }, { status: 500 });
     }
 
     return NextResponse.json({ content: data.candidates[0].content.parts[0].text });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("DEBUG: Chat Crash:", error.message);
+    return NextResponse.json({ error: `System Error: ${error.message}` }, { status: 500 });
   }
 }
