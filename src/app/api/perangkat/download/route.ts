@@ -15,7 +15,10 @@ export async function GET(request: Request) {
   const directPath = searchParams.get('directPath');
 
   if (directPath) {
-    return NextResponse.redirect(directPath);
+    const url = directPath.startsWith('http') 
+      ? directPath 
+      : new URL(directPath, request.url).toString();
+    return NextResponse.redirect(url);
   }
 
   if (!CLOUD_NAME || !API_KEY || !API_SECRET) {

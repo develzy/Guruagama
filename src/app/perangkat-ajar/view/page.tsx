@@ -179,8 +179,8 @@ function ViewContent() {
                     Pratinjau
                   </button>
                   <a 
-                    href={directPath
-                      ? `/api/perangkat/download?directPath=${encodeURIComponent(directPath)}&file=${encodeURIComponent(file.name)}`
+                    href={file.directPath
+                      ? `/api/perangkat/download?directPath=${encodeURIComponent(file.directPath)}&file=${encodeURIComponent(file.name)}`
                       : (category as any)?.isGlobal 
                       ? `/api/perangkat/download?catFolder=${encodeURIComponent(category!.folder)}&file=${encodeURIComponent(file.name)}&isGlobal=true`
                       : `/api/perangkat/download?gradePath=${encodeURIComponent(grade?.path || "")}&catFolder=${encodeURIComponent(category!.folder)}&file=${encodeURIComponent(file.name)}`}
