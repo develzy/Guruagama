@@ -1,0 +1,248 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--background);
+  position: relative;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.badge {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+  padding: 0.5rem 1.25rem;
+  background: rgba(229, 201, 127, 0.08);
+  border-radius: 100px;
+  border: 1px solid rgba(229, 201, 127, 0.15);
+  animation: badgePop 1s cubic-bezier(0.19, 1, 0.22, 1) 0.8s both;
+}
+
+.title {
+  font-size: clamp(3.5rem, 12vw, 6rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(
+    90deg, 
+    #e5c97f 0%, 
+    #fff 20%, 
+    #f3e5b5 40%, 
+    #e5c97f 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-align: center;
+  filter: drop-shadow(var(--glow-gold));
+  animation: 
+    titleReveal 1.2s cubic-bezier(0.19, 1, 0.22, 1) forwards,
+    shimmer 3s linear infinite;
+}
+
+.subtitle {
+  font-size: 1.25rem;
+  color: #a0a0a0;
+  max-width: 700px;
+  text-align: center;
+  margin-bottom: 5rem;
+  font-weight: 400;
+  line-height: 1.6;
+  animation: fadeInDown 1s ease-out 0.5s both;
+}
+
+.cardGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  max-width: 900px;
+  animation: fadeInUp 1s ease-out 1s both;
+}
+
+@keyframes titleReveal {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.95);
+    letter-spacing: 0.2em;
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    letter-spacing: -0.04em;
+    filter: blur(0);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+
+@keyframes badgePop {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+.primaryCard {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 2rem;
+  padding: 3rem;
+  text-align: left;
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+}
+
+.primaryCard:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(229, 201, 127, 0.4);
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(229, 201, 127, 0.1);
+}
+
+.cardIcon {
+  font-size: 3.5rem;
+  margin-bottom: 1.5rem;
+  display: inline-block;
+  transition: transform 0.4s ease;
+}
+
+.primaryCard:hover .cardIcon {
+  transform: scale(1.2) rotate(-5deg);
+}
+
+.cardTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+
+.cardDesc {
+  color: #b0b0b0;
+  font-size: 1.1rem;
+  margin-bottom: 2.5rem;
+  max-width: 550px;
+  line-height: 1.7;
+}
+
+.cardAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+}
+
+.primaryCard:hover .cardAction {
+  gap: 1.25rem;
+  color: var(--accent-light);
+  text-shadow: 0 0 10px rgba(229, 201, 127, 0.5);
+}
+
+.secondaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+}
+
+.sideCard {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-radius: 1.5rem;
+  padding: 2.5rem;
+  transition: all 0.4s ease;
+  backdrop-filter: blur(10px);
+}
+
+.sideCard:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(229, 201, 127, 0.3);
+  transform: translateY(-5px);
+}
+
+.sideCard h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.sideCard p {
+  color: #888;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: clamp(2.5rem, 10vw, 3.5rem);
+    margin-bottom: 2rem;
+  }
+  .subtitle {
+    font-size: 1rem;
+    margin-bottom: 3rem;
+    padding: 0 1rem;
+  }
+  .secondaryGrid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  .primaryCard {
+    padding: 2.5rem 1.5rem;
+  }
+  .cardTitle {
+    font-size: 1.6rem;
+  }
+  .cardDesc {
+    font-size: 1rem;
+  }
+  .sideCard {
+    padding: 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 1rem;
+  }
+  .badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+  }
+  .title {
+    font-size: 2.2rem;
+  }
+}
