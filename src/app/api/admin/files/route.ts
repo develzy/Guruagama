@@ -20,9 +20,9 @@ export async function GET(request: Request) {
   const prefix = subPath ? (subPath.endsWith('/') ? subPath : `${subPath}/`) : '';
 
   // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET;
+  const R2_BINDING = process.env.R2_BUCKET as any;
 
-  if (R2_BINDING) {
+  if (R2_BINDING && typeof R2_BINDING !== 'string') {
     const list = await R2_BINDING.list({ prefix, delimiter: '/' });
     const folders = (list.delimitedPrefixes || []).map((p: string) => ({
       name: p.replace(prefix, "").replace("/", ""),
@@ -62,8 +62,8 @@ export async function POST(request: Request) {
   const bytes = await file.arrayBuffer();
 
   // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET;
-  if (R2_BINDING) {
+  const R2_BINDING = process.env.R2_BUCKET as any;
+  if (R2_BINDING && typeof R2_BINDING !== 'string') {
     await R2_BINDING.put(key, bytes, { httpMetadata: { contentType: file.type } });
     return NextResponse.json({ success: true });
   }
@@ -81,8 +81,8 @@ export async function DELETE(request: Request) {
   if (!filePath) return NextResponse.json({ error: 'Path missing' }, { status: 400 });
 
   // @ts-ignore
-  const R2_BINDING = process.env.R2_BUCKET;
-  if (R2_BINDING) {
+  const R2_BINDING = process.env.R2_BUCKET as any;
+  if (R2_BINDING && typeof R2_BINDING !== 'string') {
     await R2_BINDING.delete(filePath);
     return NextResponse.json({ success: true });
   }

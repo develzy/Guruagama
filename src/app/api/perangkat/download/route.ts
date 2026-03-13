@@ -13,14 +13,14 @@ export async function GET(request: Request) {
   const directPath = searchParams.get('directPath');
 
   // @ts-ignore - Cloudflare R2 Binding
-  const R2_BINDING = process.env.R2_BUCKET;
+  const R2_BINDING = process.env.R2_BUCKET as any;
 
   let key = directPath || (isGlobal ? `${catFolder}/${fileName}` : `${gradePath}/${gradePath}/${catFolder}/${fileName}`);
   const safeFileName = fileName || key.split('/').pop() || 'document';
   const contentType = safeFileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
   // 1. TRY USING CLOUDFLARE NATIVE BINDING (PRO)
-  if (R2_BINDING) {
+  if (R2_BINDING && typeof R2_BINDING !== 'string') {
     try {
       const obj = await R2_BINDING.get(key);
       if (obj) {

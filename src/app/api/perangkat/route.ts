@@ -12,10 +12,10 @@ export async function GET(request: Request) {
   const isGlobal = searchParams.get('isGlobal') === 'true';
 
   // @ts-ignore - Cloudflare R2 Binding
-  const R2_BINDING = process.env.R2_BUCKET;
+  const R2_BINDING = process.env.R2_BUCKET as any;
 
   // 1. TRY USING CLOUDFLARE NATIVE BINDING (PRO)
-  if (R2_BINDING) {
+  if (R2_BINDING && typeof R2_BINDING !== 'string') {
     try {
       if (globalSearch) {
         const list = await R2_BINDING.list();
